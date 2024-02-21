@@ -5,16 +5,18 @@ import matplotlib.pyplot as plt
 # st.title("Explanatory Data Analysis")
 # st.sidebar.title("Upload Data")
 st.set_page_config(layout="wide")
-col1,col2,col3 = st.columns([2,2,6])
+
+col1,col2,col3 = st.columns([10,5,50])
 with col1:
-    st.image("TIH logo.jpeg")
+        st.image("fresh_TIH_logo.jpeg")
 with col3:
-    st.title("XInsights")
-    st.header("Explainable Visuals")
+        st.title("XInsights")
+        st.header("Explainable Visuals")
 col4=st.columns(7)
-col5,col6,col7= st.columns([2,2,7])
+
+col5,col6,col7= st.columns([10,5,50])
 with col5:
-     uploaded_data=st.file_uploader("Upload csv file",type = ['csv','xlsx']) 
+    uploaded_data=st.file_uploader("Upload csv file",type = ['csv','xlsx']) 
 with col7:
     tab1,tab2,tab3,tab4=st.tabs(['Data Info','Numeric Features','Categorical Features','Show Data'])
     def check1(data):
