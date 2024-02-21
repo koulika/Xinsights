@@ -12,10 +12,10 @@ with col3:
     st.title("XInsights")
     st.header("Explainable Visuals")
 col4=st.columns(7)
-col5,col6= st.columns([2,7])
+col5,col6,col7= st.columns([2,2,7])
 with col5:
      uploaded_data=st.file_uploader("Upload csv file",type = ['csv','xlsx']) 
-with col6:
+with col7:
     tab1,tab2,tab3,tab4=st.tabs(['Data Info','Numeric Features','Categorical Features','Show Data'])
     def check1(data):
         if uploaded_data is not None:
