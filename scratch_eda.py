@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
-from scipy.stats import f_oneway,chi2_contingency,kruskal,kstest,probplot
+from scipy.stats import f_oneway,chi2_contingency,kruskal,kstest,probplot,kurtosis,skew
 import plotly.figure_factory as ff
 # from chart_spec_bar1 import *
 # from chart_spec5 import *
@@ -55,19 +55,25 @@ with col7:
                 # duckdb.sql("INSERT INTO my_table BY NAME SELECT * FROM data")
                 # con.execute("INSERT INTO test_df_table SELECT * FROM data")
             with tab0:
-                 st.title("Dimension")
-                 list_1=[]
-                 for i in data.columns:
-                    
-                    if data[i].dtypes=="object" :
-                         list_1.append(i)     
-                 st.dataframe(list_1) 
-                 st.title("Measures")
-                 list_2=[]
-                 num_col= data.select_dtypes(include="number").columns.to_list()
-                 for i in num_col: 
-                    list_2.append(i)     
-                 st.dataframe(list_2)        
+                #  tab_dim,tab_mea=st.tabs(["Dimension","Measures"])
+                #  with tab_dim:
+                #     st.title("Dimension")
+                    cat_bool_col= data.select_dtypes(include=['object','bool']).columns.to_list()
+                #     data_1=pd.DataFrame(cat_col)
+                #     st.data_editor(data_1, num_rows="dynamic")
+                #  with tab_mea:  
+                #     st.title("Measures")
+                    num_col=data.select_dtypes(include='number').columns.to_list()
+                #     data_2=pd.DataFrame(num_col)
+                #     st.data_editor(data_2,num_rows="dynamic")
+                    dim_mea=[]
+                    for i in data.columns:
+                        if(i in cat_bool_col):
+                            dim_mea.append('Dimension')
+                        else:
+                            dim_mea.append('Measure')    
+                    dict_dim_mea={"Column Name": data.columns,'Dimeansion/Measure':dim_mea}
+                    st.table(dict_dim_mea)
             with tab1:
                 rows=data.shape[0]
                 cols= data.shape[1]
@@ -87,7 +93,7 @@ with col7:
                 dict1={"Description":['Number of Rows','Number of Columns','Number of Duplicate Rows','Number of missing values'],"Values":[rows,cols,no_duplicates,no_missing_val]}
                 df= pd.DataFrame(dict1)
                 st.table(df)
-                st.title("Column Information")
+                st.title("Column Wise Information")
                 cat_col= data.select_dtypes(include='object').columns.to_list()
                 for j in cat_col:
                     flag=0
@@ -110,25 +116,37 @@ with col7:
                             flag= flag-1  
                     if(flag>=1):
                         data[j]=data[j].astype('datetime64[ns]')
-                dictionary={'datatypes':data.dtypes} 
-                show=pd.DataFrame(dictionary)   
-                st.dataframe(show)         
-                # tab2=data.df()
-                # tab3=tab2['Columns'].to_list()
-                # dict= eval(tab3[0])
-                # print(dict)
-                # for i,val in dict.items():
-                #     if (val =='VARCHAR' or  val=='DATE' or val=='TIME' or val == 'BLOB' or val=='BOOLEAN' or val=='INTERVAL' or val=='TIMESTAMP' or val=='TIMESTAMP WITH TIME ZONE' or val=='BIT' or val =='UUID'):
-                #         print(i," -->IT IS A DIMENSION")
-                #     else:
-                #         print(i,"-->IT IS A MEASURE")    
-
-                # columns = list(data.columns)
-                # table_2 = pd.DataFrame({"Columns":columns,"Types": data.dtypes.to_list()})
-                # st.dataframe(table_2,hide_index=True) 
-                st.title("No of Unique Values in each Column")
-                data_num_uni=pd.DataFrame( [(i, data[i].nunique()) for i in data.columns], columns=["Column Name","No. of Unique Values"])
-                st.dataframe(data_num_uni)   
+                # dictionary={'datatypes':data.dtypes} 
+                # show=pd.DataFrame(dictionary)   
+                # st.dataframe(show)         
+                datatype=[]
+                uni=[]
+                miss=[]
+                zer=[]
+                inf=[]
+                for i in data.columns:
+                    miss.append(data[i].isna().sum())
+                    uni.append((data[i].nunique()))
+                    inf.append(data[i].isin([np.inf, -np.inf]).sum())
+                    if(data.dtypes[i]=="int64"):
+                        datatype.append('Numerical (Integer)')
+                        zer.append(data[i][data[i]==0].count())
+                    elif(data.dtypes[i]=='float'):
+                        datatype.append('Numerical (Decimal Point)')
+                        zer.append(data[i][data[i]==0].count())
+                    elif(data.dtypes[i]=='object'):
+                        datatype.append('Categorical')
+                        zer.append(0)
+                    elif(data.dtypes[i]=='bool'):
+                        datatype.append('Boolean')
+                        zer.append(0) 
+                    else:
+                         datatype.append('Date')
+                         zer.append(0)       
+                st.table({"Column Name":data.columns,"Column Type":datatype,"No. of Unique Values":uni,"No. of Missing Values":miss,"Count of Zero Values":zer,"Count of Infinity":inf})
+                # st.title("No of Unique Values in each Column")
+                # data_num_uni=pd.DataFrame( [(i, data[i].nunique()) for i in data.columns], columns=["Column Name","No. of Unique Values"])
+                # st.dataframe(data_num_uni)   
             with tab2:
                 st.header("Numeric Features to be explored")
                 num_col= data.select_dtypes(include="number").columns.to_list()
@@ -143,7 +161,11 @@ with col7:
                 col7=np.sqrt(data[selected_col].var())
                 col8=data[selected_col].min()
                 col9=data[selected_col].max()
-                dict={"No.of Unique Values":col1,"No.of Rows with Missing Values": col2,"No.of Rows with 0": col3,"No.of Rows with negative Values": col4,"Average Value": col5,"Median": col6,"Min Value": col8,"Max Value": col9,"Sd":col7}
+                col10= skew(data[selected_col],axis=0)
+                col11=kurtosis(data[selected_col],axis=0)
+                col12=data[selected_col].quantile(0.25)
+                col13=data[selected_col].quantile(0.75)
+                dict={"No.of Unique Values":col1,"No.of Rows with Missing Values": col2,"No.of Rows with 0": col3,"No.of Rows with negative Values": col4,"Average Value": col5,"Median": col6,"Min Value": col8,"Max Value": col9,"Sd":col7,"Skewness":col10,"Kurtosis":col11,"25th Quantile":col12,"75 th Quantile":col13}
                 info_df=pd.DataFrame(list(dict.items()),columns=["description","Value"])
                 st.dataframe(info_df)
                 # skewness= data[num_col].skew()
@@ -155,12 +177,12 @@ with col7:
                 # histogram1=go.Figure(data=[go.Histogram(x=data[selected_col])])
                 # histogram1.update_layout(bargap=0.2,xaxis_title=selected_col,yaxis_title="Proportion")
                 # st.plotly_chart(histogram1) 
-                # hist=[data[selected_col]]
-                # group=['Distplot']
-                # figure= ff.create_distplot(hist,bin_size=0.5,group_labels=group,show_hist=True,show_rug=False) 
-                # figure.add_vline(np.mean(data[selected_col]),line_dash='dash',line_color = 'firebrick')
-                # figure.update_layout(bargap=0.2,xaxis_title=selected_col,yaxis_title="Proportion")
-                # st.plotly_chart(figure) 
+                hist=[data[selected_col]]
+                group=['Distplot']
+                figure= ff.create_distplot(hist,bin_size=0.5,group_labels=group,show_hist=True,show_rug=False) 
+                figure.add_vline(np.mean(data[selected_col]),line_dash='dash',line_color = 'firebrick')
+                figure.update_layout(bargap=0.2,xaxis_title=selected_col,yaxis_title="Proportion")
+                st.plotly_chart(figure) 
                 # chart_spec_hist=generate_chart_specs(data,selected_col, x_encoding_type="quantitative", mark_type="bar")
                 # st.vega_lite_chart(chart_spec_hist)
             with tab3:
@@ -186,33 +208,38 @@ with col7:
             with tab4:
                 st.header("Data is as follows:")
                 st.dataframe(data)
-                num_col=data.select_dtypes(include='number').columns.to_list()
+                num_col=data.select_dtypes(include=['number']).columns.to_list()
                 x=st.selectbox("Select a column to check its Distribution",num_col)
                 test_stat= kstest(data[x],"norm",alternative='two-sided')
+                print(test_stat)
                 st.write("p value is:",test_stat[1])
                 if(round(test_stat[1],3)<=0.05):
                     st.write("Datapoints are not Normally Distributed")
                 else:
                     st.write("Datapoints are Normally Distributed")
                 qq= probplot(data[x],dist='norm',plot=plt)
-                st.pyplot(plt.show())
+                st.pyplot(plt.gcf())
             with tab5:
                 #  column1,column2,column3= st.columns([2,1,2])
                 #  column4,column5,column6= st.columns([2,1,2])
                 #  num_col= data.select_dtypes(include="number").columns.to_list()
                 #  with column1:
-                    col_except_date= data.select_dtypes(exclude='datetime').columns.to_list()
+                    col_except_date= data.select_dtypes(exclude=['datetime','bool']).columns.to_list()
                     x=st.selectbox("Select first column",col_except_date)
                     with st.expander("See the type"):
-                        if(data.dtypes[x]=='int64' or data.dtypes[x]=='float' ):
-                            st.write("Numerical")  
+                        if(data.dtypes[x]=='int64'):
+                            st.write("Numerical Integer") 
+                        elif(data.dtypes[x]=='float'):
+                            st.write("Numerical Decimal Point")
                         elif(data.dtypes[x]=='object'):
-                            st.write("Categorical")  
+                             st.write("Categorical")      
                 # with column4: 
                     y=st.selectbox("Select Second column",col_except_date)
                     with st.expander("See the type"):
-                        if(data.dtypes[y]=='int64' or data.dtypes[y]=='float'):
-                            st.write("Numerical") 
+                        if(data.dtypes[y]=='int64'):
+                            st.write("Numerical Integer") 
+                        elif(data.dtypes[y]=='float'):
+                            st.write("Numerical Decimal Point")
                         elif(data.dtypes[y]=='object'):
                              st.write("Categorical")                
                     if (st.button("Show the Correlation")==True):
