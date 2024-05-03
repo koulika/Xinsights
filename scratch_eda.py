@@ -1,5 +1,6 @@
 import streamlit as st
 # import duckdb
+# import circlify
 import re
 import datetime
 import pandas as pd
@@ -9,6 +10,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy.stats import f_oneway,chi2_contingency,kruskal,kstest,probplot,kurtosis,skew
 import plotly.figure_factory as ff
+from sklearn.cluster import KMeans
+from sklearn import preprocessing
+from sklearn.preprocessing import LabelEncoder,StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 # from chart_spec_bar1 import *
 # from chart_spec5 import *
 # import warnings
@@ -29,7 +35,7 @@ col5,col6,col7= st.columns([10,5,50])
 with col5:
     uploaded_data=st.file_uploader("Upload csv file",type = ['csv','xlsx']) 
 with col7:
-    tab0,tab1,tab2,tab3,tab4,tab5,tab6,tab7=st.tabs(["Dimension and Measures",'Data Info','Numeric Features','Categorical Features','Show Data and Its Distribution','Bivariate-Correlation','Multivariate-Correlation','Outliers'])
+    tab0,tab1,tab2,tab3,tab4,tab5,tab6,tab7=st.tabs(["Dimension and Measures",'Data Info','Numeric Features','Categorical Features','Show Data and Its Distribution','Bivariate-Correlation','Multivariate-Correlation','Clustering'])
     def check1(data):
         if uploaded_data is not None:
             if uploaded_data.type=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
@@ -42,7 +48,20 @@ with col7:
                 val=pd.read_csv(uploaded_data) 
                 # val=duckdb.sql("From sniff_csv('test.csv')")
                 return(val)
-        return(val)     
+        return(val) 
+
+    def out(df):
+        
+                d=0
+                q1= df.quantile(0.25)
+                q3= df.quantile(0.75)
+                IQR= q3-q1
+                ub= q3+1.5*IQR
+                lb= q1-1.5*IQR
+                for j in df:
+                        if(j>ub or j<lb):
+                            d=d+1
+                return(d)                             
     if uploaded_data is not None:
             # print(uploaded_data.type)
             # data = pd.read_csv(uploaded_data)
@@ -93,16 +112,22 @@ with col7:
                 dict1={"Description":['Number of Rows','Number of Columns','Number of Duplicate Rows','Number of missing values'],"Values":[rows,cols,no_duplicates,no_missing_val]}
                 df= pd.DataFrame(dict1)
                 st.table(df)
-                st.title("Column Wise Information")
+                st.title("Column Wise Summary")
                 cat_col= data.select_dtypes(include='object').columns.to_list()
                 for j in cat_col:
                     flag=0
                     c=[]
                     for i in data[j]:
                         test_str = i
-                        pattern_str_1 = r'^\d{4}-\d{2}-\d{2}$'
-                        pattern_str_2= r'^\d{2}-\d{2}-\d{4}$'
-                        if re.match(pattern_str_1, str(test_str)) or re.match(pattern_str_2, str(test_str)):
+                        pattern_str_1 = r'^\d{4}(\-|/|.|,)\d{2}(\-|/|.|,)\d{2}$'
+                        pattern_str_2= r'^\d{2}(\-|/|.|,)\d{2}(\-|/|.|,)\d{4}$'
+                        pattern_str_3= r'^\d{2}(\-|/|.|,)\d{2}(\-|/|.|,)\d{2}$'
+                        pattern_str_8=r'^\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|,|-|.)\d{2}(\/|-|,|.)\d{4}$|^\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|,|-|.)\d{2}(\/|-|.|,)\d{2}$|^\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|-|.|,)\d{4}(\/|-|.|,)\d{2}$|^\d{2}(\/|-|.|,)\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|-|.|,)\d{4}$|^\d{2}(\/|-|.|,)\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|-|.|,)\d{2}$|^\d{4}(\/|-|.|,)\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|-|.|,)\d{2}$|^\d{2}(\/|-|.)\b((?:jan(?:uary)?|feb(?:ruary)?|...|dec(?:ember)?)|(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?))(\/|-|.|,)\d{2}$'
+                        # pattern_str_4= r'^\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{2}(\/|-|.)\d{4}$|^\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{2}(\/|-|.)\d{2}$|^\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{4}(\/|-|.)\d{2}$'
+                        # pattern_str_5= r'^\d{2}(\/|-|.)\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{4}$|^\d{2}(\/|-|.)\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{2}$'
+                        # pattern_str_6= r'^\d{4}(\/|-|.)\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{2}$|^\d{2}(\/|-|.)\b(?:Jan(?:uary)?|Feb(?:ruary)?|...|Dec(?:ember)?)(\/|-|.)\d{2}$'
+                        pattern_str_7=r'^(?:(?:(?:0?[13578]|1[02])(\/|-|\.)31)\1|(?:(?:0?[1,3-9]|1[0-2])(\/|-|\.)(?:29|30)\2))(?:(?:1[6-9]|[2-9]\d)?\d{2})$|^(?:0?2(\/|-|\.)29\3(?:(?:(?:1[6-9]|[2-9]\d)?(?:0[48]|[2468][048]|[13579][26])|(?:(?:16|[2468][048]|[3579][26])00))))$|^(?:(?:0?[1-9])|(?:1[0-2]))(\/|-|\.)(?:0?[1-9]|1\d|2[0-8])\4(?:(?:1[6-9]|[2-9]\d)?\d{2})$'
+                        if re.match(pattern_str_1, str(test_str)) or re.match(pattern_str_2, str(test_str)) or re.match(pattern_str_3, str(test_str))  or re.match(pattern_str_7,str(test_str)) or re.match(pattern_str_8,str(test_str)):
                             # print("True")
                             c.append('True')
                         else:
@@ -119,34 +144,127 @@ with col7:
                 # dictionary={'datatypes':data.dtypes} 
                 # show=pd.DataFrame(dictionary)   
                 # st.dataframe(show)         
+                num_col=data.select_dtypes(include=['number']).columns.to_list()
                 datatype=[]
                 uni=[]
                 miss=[]
                 zer=[]
-                inf=[]
+                neg=[]
+                mean=[]
+                median=[]
+                skewness=[]
+                kurto=[]
+                q_1=[]
+                q_3=[]
+                minimum=[]
+                maximum=[]
+                sd=[]
+                # inf=[]
+                outliers=[]
                 for i in data.columns:
                     miss.append(data[i].isna().sum())
                     uni.append((data[i].nunique()))
-                    inf.append(data[i].isin([np.inf, -np.inf]).sum())
+                    
+                    # inf.append(data[i].isin([np.inf, -np.inf]).sum())
                     if(data.dtypes[i]=="int64"):
+                        c=0
                         datatype.append('Numerical (Integer)')
                         zer.append(data[i][data[i]==0].count())
+                        neg.append(data[i].lt(0).sum())
+                        q1= data[i].quantile(0.25)
+                        q3= data[i].quantile(0.75)
+                        IQR= q3-q1
+                        ub= q3+1.5*IQR
+                        lb= q1-1.5*IQR
+                        for j in data[i]:
+                             if(j>ub or j<lb):
+                                  c=c+1
+                        outliers.append(c)
+                        mean.append(round(data[i].mean(),3))
+                        median.append(round(data[i].median(),3))
+                        skewness.append(round(data[i].skew(),3))
+                        kurto.append(round(data[i].kurt(),3))
+                        sd.append(round(data[i].std(),3))
+                        minimum.append(data[i].min())
+                        maximum.append(data[i].max())
+                        q_1.append(data[i].quantile(0.25))
+                        q_3.append(data[i].quantile(0.75))
                     elif(data.dtypes[i]=='float'):
+                        c=0
                         datatype.append('Numerical (Decimal Point)')
                         zer.append(data[i][data[i]==0].count())
+                        neg.append(data[i].lt(0).sum())
+                        q1= data[i].quantile(0.25)
+                        q3= data[i].quantile(0.75)
+                        IQR= q3-q1
+                        ub= q3+1.5*IQR
+                        lb= q1-1.5*IQR
+                        for j in data[i]:
+                            if(j>ub or j<lb):
+                                  c=c+1
+                        outliers.append(c)
+                        mean.append(round(data[i].mean(),3))
+                        median.append(round(data[i].median(),3))
+                        skewness.append(round(data[i].skew(),3))
+                        kurto.append(round(data[i].kurt(),3))
+                        sd.append(round(data[i].std(),3))
+                        minimum.append(data[i].min())
+                        maximum.append(data[i].max())
+                        q_1.append(data[i].quantile(0.25))
+                        q_3.append(data[i].quantile(0.75))
                     elif(data.dtypes[i]=='object'):
+                        neg.append("Not Applicable")
                         datatype.append('Categorical')
                         zer.append(0)
+                        outliers.append("Not Applicable")
+                        mean.append("Not applicable")
+                        median.append("Not applicable")
+                        skewness.append("Not applicable")
+                        kurto.append("Not applicable")
+                        q_1.append("Not applicable")
+                        q_3.append("Not applicable")
+                        maximum.append("Not Applicable")
+                        minimum.append("Not Applicable")
+                        sd.append("Not Applicable")
                     elif(data.dtypes[i]=='bool'):
                         datatype.append('Boolean')
-                        zer.append(0) 
+                        zer.append(0)
+                        neg.append("Not Applicable") 
+                        outliers.append("Not Applicable")
+                        mean.append(round(data[i].mean(),3))
+                        median.append(round(data[i].median(),3))
+                        skewness.append(round(data[i].skew(),3))
+                        kurto.append(round(data[i].kurt(),3))
+                        sd.append(round(data[i].std(),3))
+                        minimum.append(data[i].min())
+                        maximum.append(data[i].max())
+                        q_1.append(data[i].quantile(0.25))
+                        q_3.append(data[i].quantile(0.75))
                     else:
                          datatype.append('Date')
-                         zer.append(0)       
-                st.table({"Column Name":data.columns,"Column Type":datatype,"No. of Unique Values":uni,"No. of Missing Values":miss,"Count of Zero Values":zer,"Count of Infinity":inf})
+                         zer.append(0)
+                         neg.append("Not Applicable") 
+                         outliers.append("Not Applicable")
+                         mean.append("Not applicable")
+                         median.append("Not applicable")
+                         skewness.append("Not applicable")
+                         kurto.append("Not applicable")
+                         q_1.append("Not applicable")
+                         q_3.append("Not applicable")  
+                         maximum.append("Not Applicable")
+                         minimum.append("Not Applicable")
+                         sd.append("Not Applicable")    
+                st.table({"Column Name":data.columns,"Column Type":datatype,"No. of Unique Values":uni,"No. of Missing Values":miss,"Count of Zero Values":zer,"Count of Outliers":outliers,"No.of negative values":neg,"Mean":mean,"Median":median,"Skewness":skewness,"Kurtosis":kurto,"First Quartile":q_1,"Third Quartile":q_3,"Minimum Value": minimum,"Maximum Value":maximum,"Standard Deviation":sd})
                 # st.title("No of Unique Values in each Column")
                 # data_num_uni=pd.DataFrame( [(i, data[i].nunique()) for i in data.columns], columns=["Column Name","No. of Unique Values"])
-                # st.dataframe(data_num_uni)   
+                # st.dataframe(data_num_uni)
+                fig1= px.box(data[num_col]) 
+                fig1.update_layout(
+                                    title= "BOXPLOT OF NUMERIC COLUMNS",
+                                    xaxis_title="Variables",
+                                    yaxis_title="Values"  
+                                    )           
+                st.plotly_chart(fig1)   
             with tab2:
                 st.header("Numeric Features to be explored")
                 num_col= data.select_dtypes(include="number").columns.to_list()
@@ -165,7 +283,8 @@ with col7:
                 col11=kurtosis(data[selected_col],axis=0)
                 col12=data[selected_col].quantile(0.25)
                 col13=data[selected_col].quantile(0.75)
-                dict={"No.of Unique Values":col1,"No.of Rows with Missing Values": col2,"No.of Rows with 0": col3,"No.of Rows with negative Values": col4,"Average Value": col5,"Median": col6,"Min Value": col8,"Max Value": col9,"Sd":col7,"Skewness":col10,"Kurtosis":col11,"25th Quantile":col12,"75 th Quantile":col13}
+                col14=out(data[selected_col])
+                dict={"No.of Unique Values":col1,"No.of Rows with Missing Values": col2,"No.of Rows with 0": col3,"No.of Rows with negative Values": col4,"Average Value": col5,"Median": col6,"Min Value": col8,"Max Value": col9,"Sd":col7,"Skewness":col10,"Kurtosis":col11,"25th Quantile":col12,"75 th Quantile":col13,"outliers_no":col14}
                 info_df=pd.DataFrame(list(dict.items()),columns=["description","Value"])
                 st.dataframe(info_df)
                 # skewness= data[num_col].skew()
@@ -211,7 +330,7 @@ with col7:
                 num_col=data.select_dtypes(include=['number']).columns.to_list()
                 x=st.selectbox("Select a column to check its Distribution",num_col)
                 test_stat= kstest(data[x],"norm",alternative='two-sided')
-                print(test_stat)
+                # print(test_stat)
                 st.write("p value is:",test_stat[1])
                 if(round(test_stat[1],3)<=0.05):
                     st.write("Datapoints are not Normally Distributed")
@@ -313,44 +432,203 @@ with col7:
                  heatmap_s= px.imshow(mul_corr_s,text_auto=True) 
                  st.plotly_chart(heatmap_s) 
             with tab7:
-                    outlier=[]
-                    c=0
-                    d={}
-                    for i in num_col:
-                         c=0
-                #    Z-score method of detecting outliers
-                        #  miu= np.mean(data[i])
-                        #  sd=np.std(data[i])
-                        # #  st.write("mean is:",miu,"sd is :",sd)
-                        #  for j in data[i]:
-                        #       z= (j-miu)/sd
-                        #       if(z>3 or z<-3):
-                        #            c=c+1
-                                #    outlier= outlier.append(j)
-                    #     #  st.write("Number of Outliers of column",i,"is : ",c)
-                        #  d[i]=c 
-                    #      out_df=pd.DataFrame(list(d.items()),columns=["Column_Name","No.of Outliers"]) 
-                    # st.table(out_df)            
-                         q1= data[i].quantile(0.25)
-                         q3= data[i].quantile(0.75)
-                         IQR= q3-q1
-                         ub= q3+1.5*IQR
-                         lb= q1-1.5*IQR
-                         for j in data[i]:
-                            if(j<lb or j>ub):
-                                    # outlier.append(j)
-                                    c=c+1
-                         d[i]=c
-                        #  d["outlier is"]=outlier
-                         out_df=pd.DataFrame(list(d.items()),columns=["Column_Name","No.of Outliers"]) 
-                    st.table(out_df) 
-                    fig1= px.box(data[num_col]) 
-                    fig1.update_layout(
-                                    title= "BOXPLOT OF NUMERIC COLUMNS",
-                                    xaxis_title="Variables",
-                                    yaxis_title="Values"  
-                                    )           
-                    st.plotly_chart(fig1)
+                tab1,tab2,tab3=st.tabs(["Basic Clusters","PCA Clusters","Cluster Using 2 Feature"])
+                le = LabelEncoder()
+                num_col=data.select_dtypes(include="number").columns.to_list()
+                num_col_df=data.select_dtypes(include=['number','object'])
+                for i in num_col_df.columns:
+                      for j in num_col:
+                           if(j==i):
+                             num_col_df[i]=num_col_df[i].fillna(num_col_df[i].mean())
+                      if((num_col_df[i].nunique())<=10):
+                            num_col_df[i]=le.fit_transform(num_col_df[i])
+                num_col_df=num_col_df.select_dtypes(include='number')
+                with tab1:
+                 st.title("Basic Clustering")
+
+                 
+                #  categorical_data=data.select_dtypes(include='object')
+                #  for i in categorical_data.columns:
+                    
+                #     if((categorical_data[i].nunique())<=10):
+                         
+                #         categorical_data[i]=le.fit_transform(categorical_data[i])
+                #             #   df['Color'] = le.fit_transform(df['Color'])
+                #  categorical_data=categorical_data.select_dtypes(include='number')
+                #  st.dataframe(categorical_data)
+
+
+                #  st.dataframe(num_col_df)
+                 
+                 
+                 
+                
+                # #  elbow method determining k
+                 data_norm= preprocessing.normalize(num_col_df)
+                 wcss_list=[]
+                 silhouette_avg=[]
+                 max_sil=-2
+                 num_clusters=0
+                #  score=[]
+                 for k in range(2,11):
+                  cluster_model=KMeans(n_clusters=k,init='k-means++',random_state=42)
+                  cluster_model.fit_predict(data_norm)
+                  wcss_list.append(cluster_model.inertia_)
+                  silhouette_avg.append(silhouette_score(data_norm,cluster_model.labels_))
+                  for i in range(0,len(silhouette_avg)):
+                     if(silhouette_avg[i]>max_sil):
+                        max_sil=silhouette_avg[i]
+                        num_clusters=k
+                 scatter_cluster=px.line(x=range(2,11),y=wcss_list,markers=True,title='Elbow Method')
+                 st.plotly_chart(scatter_cluster)
+                 silhouette_vs_k=px.line(x=range(2,11),y=silhouette_avg,markers=True,title='Silhouette Analysis for optimal value of clusters')
+                 st.plotly_chart(silhouette_vs_k)
+                 st.write("Our suggested value of optimal number of clusters is",num_clusters)
+                 val_k=st.selectbox("Choose the number of clusters to be formed",range(num_clusters,11),key='1')
+                 fin_cluster_model=KMeans(n_clusters=val_k,init='k-means++',random_state=42)
+                 fin_fit=fin_cluster_model.fit_predict(data_norm)
+                 num_col_df['Clusters']=fin_cluster_model.labels_
+                 num_col_df['Clusters']=num_col_df['Clusters'].astype(str)
+                 st.subheader(f"Count of Samples in each of {val_k} clusters")
+                #  count=[]
+                #  name=[]
+                #  cluster_dict={}
+
+                #  for i in range(0,val_k):
+                #       c=0
+                #       for j in num_col_df['Clusters']:
+                        
+                #         if(j==str(i)):
+                #             c=c+1
+                #       count.append(c)
+                #       name.append(str(i))
+                #       cluster_dict={"Labels":name,"Count of Samples in each labels":count}
+                
+                #  tab_count=pd.DataFrame(cluster_dict)
+                #  st.table(tab_count)
+                
+                #  circles = circlify.circlify(
+                #             tab_count['Count of Samples in each labels'].tolist(),
+                #             show_enclosure=False,
+                #             target_enclosure=circlify.Circle(x=0, y=0, r=1)
+                #         )
+                #  circles = circles[::-1]
+                #  fig, ax = plt.subplots(figsize=(5,5))
+                #  ax.axis('off')
+                #  lim = max(
+                #             max(
+                #                 abs(circle.x) + circle.r,
+                #                 abs(circle.y) + circle.r,
+                #             )
+                #             for circle in circles
+                #         )
+                #  plt.xlim(-lim, lim)
+                #  plt.ylim(-lim, lim)
+                 
+                #  labels= tab_count['Labels']
+
+                #  for circle, label in zip(circles, labels):
+                #         x, y, r = circle
+                #         ax.add_patch(plt.Circle((x, y), r, alpha=0.9, linewidth=0.5,fill=True,facecolor="#69b2a3",edgecolor='black'))
+                #         plt.annotate(
+                #             label,
+                #             (x, y),
+                #             va='center',
+                #             ha='center'
+                #         )
+                #  st.pyplot(plt.gcf())
+            # histogram showing the counts
+                 hist_cluster=px.histogram(num_col_df,x='Clusters',color='Clusters')
+                 hist_cluster.update_layout(bargap=0.2,xaxis_title="Clusters",yaxis_title="Count of samples in each cluster")
+                 st.plotly_chart(hist_cluster)
+                 sil=silhouette_score(data_norm,fin_cluster_model.labels_)
+                 see_3=st.button("See the Silhouette Score without PCA")
+                 if (see_3==True):
+                      st.write("The  Silhoutte score is ",round(sil,3))
+
+                #  x=st.selectbox("enter the column 1 whose custers to be seen",num_col)
+                #  y=st.selectbox("enter the column 2 whose custers to be seen",num_col)
+                #  fig_cluster=px.scatter(num_col_df,x=num_col_df[x],y=num_col_df[y],color=fin_cluster_model.labels_,color_continuous_scale=px.colors.sequential.Viridis)
+                #  st.plotly_chart(fig_cluster)
+            with tab2:
+                 st.title("PCA Clusters")
+                 standardized_data=StandardScaler().fit_transform(num_col_df)
+                 pca= PCA()
+                 pca.fit(standardized_data)
+                #  pc_vs_var=px.line(x=range(1,(standardized_data.shape[1]+1)),y=pca.explained_variance_ratio_.cumsum(),markers='*')
+                #  st.plotly_chart(pc_vs_var)
+                 pca=PCA(n_components=2)
+                 pca.fit(standardized_data)
+                 reduced_data=pca.transform(standardized_data)
+                 silhouette_avg_pca=[]
+                 max_sil_pca=-2
+                 num_clusters_pca=0
+                 wcss_list_pca=[]
+                 for k_pca in range(2,11):
+                #   max_sil.append(-2)
+                  cluster_model_pca=KMeans(n_clusters=k_pca,init='k-means++',random_state=42)
+                  cluster_model_pca.fit_predict(reduced_data)
+                  wcss_list_pca.append(cluster_model_pca.inertia_)
+                  silhouette_avg_pca.append(silhouette_score(reduced_data,cluster_model_pca.labels_))
+                #   print(silhouette_avg)
+                  for i in range(0,len(silhouette_avg_pca)):
+                    if(silhouette_avg_pca[i]>max_sil_pca):
+                        max_sil_pca=silhouette_avg_pca[i]
+                        num_clusters_pca=k_pca
+                 
+                 scatter_cluster_pca=px.line(x=range(2,11),y=wcss_list_pca,markers=True,title='Elbow Method PCA')
+                 silhouette_vs_k=px.line(x=range(2,11),y=silhouette_avg_pca,markers=True,title='Silhouette analysis For Optimal k')
+                 st.plotly_chart(scatter_cluster_pca)
+                 st.plotly_chart(silhouette_vs_k)
+                 
+                 st.write("Our suggested value of optimal number of clusters is ",num_clusters_pca)
+                 val_k_pca=st.selectbox("Choose the number of clusters to be formed",range(num_clusters_pca,11),key='2')
+                 fin_cluster_model_pca=KMeans(n_clusters=val_k_pca,init='k-means++',random_state=42)
+                 fin_cluster_model_pca.fit_predict(reduced_data)
+                 num_col_df['Cluster_pca']=fin_cluster_model_pca.labels_
+                 pca_kmeans_dataframe=pd.concat([num_col_df.reset_index(drop=True),pd.DataFrame(reduced_data)],axis=1)
+                 pca_kmeans_dataframe.columns.values[-2:]=['Component 1','Component 2']
+                 st.write(pca_kmeans_dataframe.drop(['Clusters'],axis=1))
+                 fig_cluster=px.scatter(pca_kmeans_dataframe,x=pca_kmeans_dataframe['Component 1'],y=pca_kmeans_dataframe['Component 2'],color=fin_cluster_model_pca.labels_,color_continuous_scale=px.colors.sequential.Viridis)
+                 st.plotly_chart(fig_cluster)
+                 fin_silhouette_avg= silhouette_score(reduced_data,fin_cluster_model_pca.labels_)
+                 see=st.button("See the Silhouette Score with PCA")
+                 if (see==True):
+                      st.write("The  Silhoutte score is ",round(fin_silhouette_avg,3))
+            with tab3:
+                 Feature_1=st.selectbox("Choose any column",num_col_df.drop(['Clusters','Cluster_pca'],axis=1).columns)
+                 Feature_2=st.selectbox("Choose any column",num_col_df.drop(['Clusters','Cluster_pca',Feature_1],axis=1).columns)
+                 data_2_fea=pd.DataFrame({f"{Feature_1}": num_col_df[Feature_1],f"{Feature_2} ":num_col_df[Feature_2]})
+                #  st.dataframe(data_2_fea)
+                 norm_data_2_fea=StandardScaler().fit_transform(data_2_fea)
+                 wcss_2=[]
+                 silhouette_avg_2=[]
+                 max_sil_2=-2
+                 num_clusters_2=0
+                 for i in range(2,11):
+                      model_2_fea=KMeans(n_clusters=i,init='k-means++',random_state=42)
+                      model_2_fea.fit_predict(norm_data_2_fea)
+                      wcss_2.append(model_2_fea.inertia_)
+                      silhouette_avg_2.append(silhouette_score(norm_data_2_fea, model_2_fea.labels_))
+                #   print(silhouette_avg)
+                      for j in range(0,len(silhouette_avg_2)):
+                        if(silhouette_avg_2[j]>max_sil_2):
+                            max_sil_2=silhouette_avg_2[j]
+                            num_clusters_2=i
+                 scatter_cluster_2=px.line(x=range(2,11),y=wcss_2,markers=True,title='Elbow Method with 2 Feature')
+                 st.plotly_chart(scatter_cluster_2)    
+                 silhouette_vs_k_2=px.line(x=range(2,11),y=silhouette_avg_2,markers=True,title='Silhouette analysis For Optimal k')
+                 st.plotly_chart(silhouette_vs_k_2)
+                 st.write("Our suggested value of optimal number of clusters is ",num_clusters_2)
+                 val_k_2=st.selectbox("Choose number of clusters",range(num_clusters_2,11),key='3')
+                 model_2_fea=KMeans(n_clusters=val_k_2,init='k-means++',random_state=42)
+                 model_2_fea.fit_predict(norm_data_2_fea)
+                 sil_2=silhouette_score(norm_data_2_fea,model_2_fea.labels_)
+                 fig_2_fea=px.scatter(num_col_df,x=num_col_df[Feature_1],y=num_col_df[Feature_2],color=model_2_fea.labels_,color_continuous_scale=px.colors.sequential.Viridis)
+                 st.plotly_chart(fig_2_fea)
+                 see_2=st.button("See the Silhouette Score For 2 feature clustering")
+                 if (see_2==True):
+                      st.write("The  Silhoutte score is ",round(sil_2,3))    
 
 
 
